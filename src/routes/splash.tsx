@@ -1,13 +1,13 @@
 import { Hono } from 'hono'
 import { raw } from 'hono/html'
 import type { Bindings, Member } from '../types'
-import { getActiveMembers } from '../data'
+import { getActiveMembers, getEffectiveRingOrder } from '../data'
 import { CANADA_VIEWBOX, CANADA_OUTLINE_PATH, CANADA_REGION_PATHS, projectToSvg } from '../lib/canada-map'
 import { getMemberCoordinates } from '../utils/member-coords'
 
 const PANEL_NAMES = ['Splash', 'About', 'Directory', 'Join']
 
-function SplashContent({ active }: { active: Member[] }) {
+function SplashContent({ active, ringEntrySlug }: { active: Member[]; ringEntrySlug: string }) {
   return (
     <div class="splash-inner">
       <header>
@@ -49,6 +49,13 @@ function SplashContent({ active }: { active: Member[] }) {
             <h2 class="poster-text hero-bottom-text">
               {raw('CA<span class="flag-white-outline">NA</span>DA')}
             </h2>
+            <nav class="ring-widget" aria-label="Webring navigation">
+              <a href={`/prev/${ringEntrySlug}`} class="ring-widget-arrow" aria-label="Previous site in ring">{raw('&larr;')}</a>
+              <a href="/random" class="ring-widget-leaf" aria-label="Random site in ring">
+                <img src="/maple-leaf.svg" alt="" aria-hidden="true" />
+              </a>
+              <a href={`/next/${ringEntrySlug}`} class="ring-widget-arrow" aria-label="Next site in ring">{raw('&rarr;')}</a>
+            </nav>
           </div>
         </div>
       </footer>
@@ -236,7 +243,11 @@ const app = new Hono<{ Bindings: Bindings }>()
 
 app.get('/', async (c) => {
   c.header('Cache-Control', 'public, max-age=300')
-  const active = await getActiveMembers(c.env.WEBRING)
+  const [active, ringOrder] = await Promise.all([
+    getActiveMembers(c.env.WEBRING),
+    getEffectiveRingOrder(c.env.WEBRING),
+  ])
+  const ringEntrySlug = ringOrder[0] ?? active[0]?.slug ?? ''
 
   const dots = PANEL_NAMES.map((name, i) =>
     `<button class="ring-dot${i === 0 ? ' is-active' : ''}" data-dot="${i}" aria-label="Go to ${name}"></button>`
@@ -449,13 +460,36 @@ app.get('/', async (c) => {
               width: 100%;
               height: 100%;
               display: flex;
-              flex-direction: column;
               align-items: center;
               justify-content: center;
               padding: 3rem;
-              gap: 2rem;
-              max-width: 640px;
-              margin: 0 auto;
+            }
+
+            .about-layout {
+              display: grid;
+              grid-template-columns: 45% 55%;
+              align-items: center;
+              gap: 3rem;
+              max-width: 960px;
+              width: 100%;
+            }
+
+            .about-visual {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+
+            .about-svg {
+              width: 100%;
+              max-width: 360px;
+              height: auto;
+            }
+
+            .about-text {
+              display: flex;
+              flex-direction: column;
+              gap: 1.5rem;
             }
 
             .about-title {
@@ -472,13 +506,98 @@ app.get('/', async (c) => {
               flex-direction: column;
               gap: 1.25rem;
               font-family: 'Space Grotesk', sans-serif;
-              font-size: 1.1rem;
+              font-size: 1.05rem;
               line-height: 1.7;
               color: var(--fg);
             }
 
             .about-body p {
               margin: 0;
+            }
+
+            /* Ring diagram */
+            .about-ring-bg {
+              fill: none;
+              stroke: var(--border);
+              stroke-width: 0.8;
+              stroke-linejoin: round;
+              opacity: 0.07;
+              transform: translate(-180px, -40px) scale(0.55);
+            }
+
+            .about-ring-path {
+              fill: none;
+              stroke: var(--accent);
+              stroke-width: 1.5;
+              stroke-dasharray: 6 4;
+              opacity: 0;
+              animation: about-path-draw 1.5s ease-out 0.5s forwards;
+            }
+
+            @keyframes about-path-draw {
+              from { stroke-dashoffset: 800; opacity: 0; }
+              to { stroke-dashoffset: 0; opacity: 0.35; }
+            }
+
+            .about-ring-dot {
+              fill: var(--accent);
+              opacity: 0;
+              animation: about-dot-appear 0.3s ease-out 2s forwards;
+            }
+
+            @keyframes about-dot-appear {
+              from { opacity: 0; }
+              to { opacity: 0.8; }
+            }
+
+            .about-ring-node {
+              opacity: 0;
+              animation: about-node-in 0.4s ease-out forwards;
+            }
+
+            @keyframes about-node-in {
+              from { opacity: 0; transform: scale(0.7); }
+              to { opacity: 1; transform: scale(1); }
+            }
+
+            .about-node-rect {
+              fill: var(--bg);
+              stroke: var(--border);
+              stroke-width: 1.5;
+            }
+
+            .about-node-bar {
+              stroke: var(--border);
+              stroke-width: 1;
+            }
+
+            .about-ring-node--active .about-node-rect {
+              stroke: var(--accent);
+              stroke-width: 2;
+            }
+
+            .about-ring-node--active .about-node-bar {
+              stroke: var(--accent);
+              opacity: 0.5;
+            }
+
+            .about-ring-label {
+              font-family: 'Space Mono', monospace;
+              font-size: 11px;
+              fill: var(--accent);
+              text-anchor: middle;
+              font-weight: 700;
+            }
+
+            @media (prefers-reduced-motion: reduce) {
+              .about-ring-path,
+              .about-ring-dot,
+              .about-ring-node {
+                animation: none;
+                opacity: 1;
+              }
+              .about-ring-path { opacity: 0.35; }
+              .about-ring-dot { opacity: 0.8; }
             }
 
             /* ── Panel 3: Directory (split layout) ── */
@@ -679,6 +798,21 @@ app.get('/', async (c) => {
 
             /* Mobile: directory stacks vertically */
             @media (max-width: 767px) {
+              .about-inner {
+                padding: 2rem 1.5rem;
+              }
+
+              .about-layout {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+                text-align: center;
+              }
+
+              .about-svg {
+                max-width: 240px;
+                margin: 0 auto;
+              }
+
               .directory-inner {
                 flex-direction: column;
                 padding: 2rem 1.5rem;
