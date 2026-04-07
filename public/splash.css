@@ -700,7 +700,11 @@ body {
   pointer-events: none;
 }
 
-.preview-overlay:hover .preview-overlay-hint {
+.preview-overlay:not(.is-ready) {
+  pointer-events: none;
+}
+
+.preview-overlay.is-ready:hover .preview-overlay-hint {
   opacity: 1;
 }
 
@@ -1053,25 +1057,58 @@ body {
   box-shadow: 0 0 4px var(--bg), 0 0 8px var(--bg), 0 0 2px var(--fg);
 }
 
-/* ── Scroll hint ── */
-.scroll-hint {
-  position: fixed;
-  bottom: 4.5rem;
-  left: 50%;
-  transform: translateX(-50%);
-  font-family: 'Space Mono', monospace;
-  font-size: 0.7rem;
-  color: var(--fg-faint);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  z-index: 100;
-  opacity: 1;
-  transition: opacity 0.6s;
-}
-.scroll-hint.is-hidden { opacity: 0; pointer-events: none; }
-
-/* ── Mobile: vertical stack ── */
+/* ── Mobile: vertical cylinder ── */
 @media (max-width: 767px) {
+  .ring { perspective: 1600px; -webkit-perspective: 1600px; }
+
+  /* Dots: vertical strip on right edge */
+  .ring-dots {
+    right: 0.75rem;
+    left: auto;
+    bottom: 50%;
+    transform: translateY(50%);
+    flex-direction: column;
+    gap: 0.5rem;
+    height: auto;
+  }
+
+  .splash-inner {
+    width: calc(100% - 1.25rem);
+    height: calc(100% - 1.25rem);
+    min-height: calc(100vh - 1.25rem);
+  }
+
+  .hero-top { font-size: 24vw; }
+
+  .canada-flag {
+    height: 16vw;
+    flex-shrink: 1;
+    align-self: flex-end;
+  }
+
+  .splash-map {
+    width: clamp(400px, 110vw, 480px);
+    max-width: none;
+  }
+
+  .hero-bottom-inner {
+    flex-direction: column-reverse;
+    align-items: center;
+    gap: 3vw;
+  }
+
+  .hero-bottom-text {
+    font-size: 28cqw;
+    -webkit-text-stroke: 3px var(--accent);
+  }
+
+  .ring-widget { width: 60vw; }
+  .ring-widget-arrow { font-size: 8cqw; }
+  .ring-widget-leaf img { height: 12cqw; }
+}
+
+/* ── Mobile + reduced motion: flat fallback ── */
+@media (max-width: 767px) and (prefers-reduced-motion: reduce) {
   body { overflow: auto; height: auto; }
 
   .ring {
@@ -1096,18 +1133,8 @@ body {
     min-height: 100vh;
     backface-visibility: visible;
     transform: none;
+    will-change: auto;
   }
+
   .ring-dots { display: none; }
-  .scroll-hint { display: none; }
-
-  .splash-inner {
-    width: calc(100% - 2.5rem);
-    height: calc(100% - 2.5rem);
-    min-height: calc(100vh - 2.5rem);
-  }
-
-  .hero-top { font-size: 16vw; }
-  .canada-flag { height: 23.04vw; }
-  .ring-widget { width: 46.08vw; }
-  .hero-bottom-text { -webkit-text-stroke: 2px var(--accent); }
 }

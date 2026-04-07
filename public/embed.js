@@ -14,7 +14,7 @@
     '</svg>'
 
   var STYLES =
-    ':host{display:block;color:var(--webring-color,inherit)}' +
+    ':host{display:block;font-size:var(--webring-size,1rem);color:var(--webring-color,inherit)}' +
     'nav{display:flex;align-items:center;justify-content:center;gap:0.5em}' +
     'a{color:var(--webring-color,inherit);text-decoration:none;transition:color 0.2s ease}' +
     'a:hover{color:var(--webring-accent,#AF272F)}' +

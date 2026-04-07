@@ -1,22 +1,19 @@
 (function() {
   var isMobile = window.matchMedia('(max-width: 767px)').matches;
-  if (isMobile) return;
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
   var ring = document.getElementById('ring');
   var track = ring.querySelector('.ring-track');
   var panels = track.querySelectorAll('.panel:not(.panel--clone)');
   var dots = document.querySelectorAll('.ring-dot');
-  var hint = document.getElementById('scroll-hint');
   var PANEL_COUNT = parseInt(ring.getAttribute('data-panel-count'), 10);
   var ANGLE_STEP = 360 / PANEL_COUNT;
-  var panelW = window.innerWidth;
+  var panelDim = isMobile ? window.innerHeight : window.innerWidth;
 
   // Scroll state (angle-based)
   var currentAngle = 0;
   var targetAngle = 0;
   var rawTarget = 0;
-  var hasScrolled = false;
-
   // Tuning
   var SCROLL_EASE = 0.18;
   var STEPS_PER_PANEL = 20;
@@ -24,7 +21,7 @@
   var isSettled = true;
 
   function computeRadius() {
-    return Math.round(panelW / (2 * Math.tan(Math.PI / PANEL_COUNT)));
+    return Math.round(panelDim / (2 * Math.tan(Math.PI / PANEL_COUNT)));
   }
 
   var radius = computeRadius();
@@ -41,47 +38,138 @@
   // Place each panel on the cylinder surface
   function layoutPanels() {
     for (var i = 0; i < panels.length; i++) {
-      panels[i].style.transform =
-        'rotateY(' + (i * ANGLE_STEP) + 'deg) translateZ(' + radius + 'px)';
+      var angle = i * ANGLE_STEP;
+      panels[i].style.transform = isMobile
+        ? 'rotateX(' + (-angle) + 'deg) translateZ(' + radius + 'px)'
+        : 'rotateY(' + angle + 'deg) translateZ(' + radius + 'px)';
     }
   }
 
   function renderTrack() {
-    track.style.transform =
-      'translateZ(' + (-radius) + 'px) rotateY(' + (-currentAngle) + 'deg)';
+    track.style.transform = isMobile
+      ? 'translateZ(' + (-radius) + 'px) rotateX(' + currentAngle + 'deg)'
+      : 'translateZ(' + (-radius) + 'px) rotateY(' + (-currentAngle) + 'deg)';
   }
 
   layoutPanels();
   renderTrack();
 
-  // ── Wheel ──
-  ring.addEventListener('wheel', function(e) {
-    e.preventDefault();
+  function setWillChange(value) {
+    for (var i = 0; i < panels.length; i++) {
+      panels[i].style.willChange = value;
+    }
+  }
 
-    var delta = e.deltaY;
-    if (e.deltaMode === 1) delta *= 40;
-    if (e.deltaMode === 2) delta *= panelW;
-
-    // Convert pixel delta to angle delta
-    rawTarget += (delta / panelW) * ANGLE_STEP;
-    targetAngle = quantize(rawTarget);
-
+  function unsettle() {
     if (isSettled) {
       isSettled = false;
+      setWillChange('transform');
       ring.dispatchEvent(new CustomEvent('panelunsettle'));
     }
+  }
 
-    if (!hasScrolled) {
-      hasScrolled = true;
-      hint.classList.add('is-hidden');
+  // ── Wheel (desktop) ──
+  if (!isMobile) {
+    ring.addEventListener('wheel', function(e) {
+      e.preventDefault();
+
+      var delta = e.deltaY;
+      if (e.deltaMode === 1) delta *= 40;
+      if (e.deltaMode === 2) delta *= panelDim;
+
+      rawTarget += (delta / panelDim) * ANGLE_STEP;
+      targetAngle = quantize(rawTarget);
+
+      unsettle();
+
+    }, { passive: false });
+  }
+
+  // ── Touch (mobile) ──
+  if (isMobile) {
+    var touchStartY = 0;
+    var touchStartAngle = 0;
+    var lastTouchY = 0;
+    var lastTouchTime = 0;
+    var velocity = 0;
+    var isDragging = false;
+    var dragRaf = 0;
+    var pendingAngle = 0;
+
+    ring.addEventListener('touchstart', function(e) {
+      isDragging = true;
+      velocity = 0;
+      touchStartY = e.touches[0].clientY;
+      touchStartAngle = currentAngle;
+      pendingAngle = currentAngle;
+      lastTouchY = touchStartY;
+      lastTouchTime = Date.now();
+    }, { passive: true });
+
+    ring.addEventListener('touchmove', function(e) {
+      if (!isDragging) return;
+      if (e.touches.length > 1) return;
+      e.preventDefault();
+
+      var touchY = e.touches[0].clientY;
+      var now = Date.now();
+      var dt = now - lastTouchTime;
+
+      if (dt > 0) {
+        var raw = (lastTouchY - touchY) / dt;
+        velocity = Math.max(-3, Math.min(3, raw));
+      }
+
+      lastTouchY = touchY;
+      lastTouchTime = now;
+
+      // Continuous angle -- no quantization during drag for smooth tracking
+      var deltaY = touchStartY - touchY;
+      pendingAngle = touchStartAngle + (deltaY / panelDim) * ANGLE_STEP;
+
+      // Batch render via rAF to avoid multiple style writes per frame
+      if (!dragRaf) {
+        dragRaf = requestAnimationFrame(function() {
+          dragRaf = 0;
+          currentAngle = pendingAngle;
+          rawTarget = currentAngle;
+          targetAngle = currentAngle;
+          renderTrack();
+
+          unsettle();
+
+          // Update active dot (lightweight -- just class toggle)
+          var norm = ((Math.round(currentAngle / ANGLE_STEP) % PANEL_COUNT) + PANEL_COUNT) % PANEL_COUNT;
+          if (norm !== prevActiveIdx) {
+            prevActiveIdx = norm;
+            dots.forEach(function(dot, i) {
+              dot.classList.toggle('is-active', i === norm);
+            });
+            ring.dispatchEvent(new CustomEvent('panelchange', { detail: { index: norm } }));
+          }
+        });
+      }
+    }, { passive: false });
+
+    function onTouchEnd() {
+      isDragging = false;
+      if (dragRaf) { cancelAnimationFrame(dragRaf); dragRaf = 0; }
+      currentAngle = pendingAngle;
+
+      // Apply momentum then snap to nearest panel
+      var momentumAngle = velocity * 150 * (ANGLE_STEP / panelDim);
+      rawTarget = currentAngle + momentumAngle;
+      targetAngle = snapAngle(rawTarget);
+      rawTarget = targetAngle;
     }
-  }, { passive: false });
+    ring.addEventListener('touchend', onTouchEnd, { passive: true });
+    ring.addEventListener('touchcancel', onTouchEnd, { passive: true });
+  }
 
   // ── Dots ──
   dots.forEach(function(dot) {
     dot.addEventListener('click', function() {
       var idx = parseInt(dot.getAttribute('data-dot'), 10);
-      // Find shortest rotation path to target
       var target = idx * ANGLE_STEP;
       var norm = ((currentAngle % 360) + 360) % 360;
       var diff = target - norm;
@@ -89,7 +177,7 @@
       if (diff < -180) diff += 360;
       targetAngle = currentAngle + diff;
       rawTarget = targetAngle;
-      if (isSettled) { isSettled = false; ring.dispatchEvent(new CustomEvent('panelunsettle')); }
+      unsettle();
     });
   });
 
@@ -99,14 +187,14 @@
       e.preventDefault();
       targetAngle = snapAngle(currentAngle) + ANGLE_STEP;
       rawTarget = targetAngle;
-      if (isSettled) { isSettled = false; ring.dispatchEvent(new CustomEvent('panelunsettle')); }
-      if (!hasScrolled) { hasScrolled = true; hint.classList.add('is-hidden'); }
+      unsettle();
+
     } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
       e.preventDefault();
       targetAngle = snapAngle(currentAngle) - ANGLE_STEP;
       rawTarget = targetAngle;
-      if (isSettled) { isSettled = false; ring.dispatchEvent(new CustomEvent('panelunsettle')); }
-      if (!hasScrolled) { hasScrolled = true; hint.classList.add('is-hidden'); }
+      unsettle();
+
     }
   });
 
@@ -125,18 +213,18 @@
 
     // Active panel index
     var norm = ((Math.round(currentAngle / ANGLE_STEP) % PANEL_COUNT) + PANEL_COUNT) % PANEL_COUNT;
-    dots.forEach(function(dot, i) {
-      dot.classList.toggle('is-active', i === norm);
-    });
-
     if (norm !== prevActiveIdx) {
       prevActiveIdx = norm;
+      dots.forEach(function(dot, i) {
+        dot.classList.toggle('is-active', i === norm);
+      });
       ring.dispatchEvent(new CustomEvent('panelchange', { detail: { index: norm } }));
     }
 
     // Dispatch settle event when animation finishes
     if (!isSettled && currentAngle === targetAngle) {
       isSettled = true;
+      setWillChange('auto');
       ring.dispatchEvent(new CustomEvent('panelsettle', { detail: { index: norm } }));
     }
 
@@ -153,8 +241,10 @@
 
   // ── Resize ──
   window.addEventListener('resize', function() {
-    if (window.matchMedia('(max-width: 767px)').matches) return;
-    panelW = window.innerWidth;
+    var wasMobile = isMobile;
+    isMobile = window.matchMedia('(max-width: 767px)').matches;
+    if (isMobile !== wasMobile) { window.location.reload(); return; }
+    panelDim = isMobile ? window.innerHeight : window.innerWidth;
     radius = computeRadius();
     layoutPanels();
     renderTrack();

@@ -39,7 +39,7 @@ If your site is a single-page app, always use this option. The plain HTML option
 
 ### Option 2: Pure HTML (static sites only)
 
-For simple static sites that don't load external scripts:
+For simple static sites that don't load external scripts. Style however you want -- just keep the three links:
 
 ```html
 <a href="https://webring.ca/prev/your-slug">←</a>
@@ -53,6 +53,7 @@ Style the widget with CSS variables on the container div:
 
 | Variable | Default | Description |
 |---|---|---|
+| `--webring-size` | `1rem` | Overall widget size |
 | `--webring-color` | `inherit` | Arrow and leaf color |
 | `--webring-accent` | `#AF272F` | Hover color |
 
