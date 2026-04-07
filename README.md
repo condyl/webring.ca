@@ -32,7 +32,7 @@ Copy and paste into your site:
 <script src="https://webring.ca/embed.js" defer></script>
 ```
 
-Replace `your-slug` with the slug from your `members.json` entry.
+Replace `your-slug` with your filename (without `.json`).
 
 If your site is a single-page app, always use this option. The plain HTML option may not be detectable by our health check on client-rendered sites.
 
