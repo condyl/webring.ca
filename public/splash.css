@@ -102,7 +102,7 @@ body {
 }
 
 .hero-top {
-  font-size: 11vw;
+  font-size: clamp(4rem, 11vw, 10rem);
   color: var(--fg);
   display: flex;
   flex-direction: column;
@@ -431,6 +431,10 @@ body {
   flex-shrink: 0;
 }
 
+.directory-row-visit {
+  display: none;
+}
+
 /* Right: ring */
 .directory-ring-wrap {
   flex: 1 1 50%;
@@ -458,14 +462,38 @@ body {
   height: 100%;
 }
 
-.directory-ring-hint {
-  font-family: 'Space Mono', monospace;
-  font-size: 0.6rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--fg-faint);
-  margin: 0;
+.ring-zoom-controls {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 2;
 }
+
+.ring-zoom-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: 'Space Mono', monospace;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+.ring-zoom-btn:hover {
+  opacity: 1;
+}
+
 
 /* Ring nodes */
 .ring-node {
@@ -484,12 +512,13 @@ body {
 .ring-node-dot:active { cursor: grabbing; }
 
 .ring-node-label {
-  fill: var(--fg-muted);
-  font-family: 'Space Mono', monospace;
-  font-size: 6px;
+  fill: var(--fg);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 8px;
+  font-weight: 600;
   text-anchor: middle;
   pointer-events: none;
-  opacity: 0.6;
+  opacity: 0.85;
   transition: opacity 0.2s, fill 0.2s;
 }
 
@@ -599,35 +628,133 @@ body {
 
   .directory-inner {
     flex-direction: column;
-    padding: 2rem 1.5rem;
-    gap: 1.5rem;
+    padding: 1rem 0 1.5rem;
+    gap: 0.75rem;
+    height: 100%;
   }
 
   .directory-list-wrap {
     flex: none;
     order: 2;
+    overflow: visible;
+    padding: 0;
   }
 
-  .directory-ring-wrap {
-    flex: none;
-    order: 1;
-    max-width: 220px;
-    margin: 0 auto;
-  }
-
-  .directory-list {
-    max-height: calc(100vh - 340px);
-  }
-
-  .directory-row-site,
-  .directory-header-site {
+  .directory-header {
     display: none;
   }
 
-  .directory-row-city,
-  .directory-header-city {
-    width: auto;
+  .directory-list {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 1rem;
+    -webkit-overflow-scrolling: touch;
+    gap: 0.75rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    max-height: none;
+    scrollbar-width: none;
   }
+
+  .directory-list::after {
+    display: none;
+  }
+
+  .directory-list::-webkit-scrollbar {
+    display: none;
+  }
+
+  .directory-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+    flex: 0 0 auto;
+    width: 140px;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    scroll-snap-align: start;
+  }
+
+  .directory-row-name {
+    white-space: normal;
+    font-size: 0.85rem;
+    line-height: 1.3;
+  }
+
+  .directory-row-site {
+    display: block;
+    width: auto;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--fg-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .directory-row-city {
+    width: auto;
+    text-align: left;
+    font-size: 0.7rem;
+  }
+
+  .directory-row.is-selected {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 6%, transparent);
+  }
+
+  .directory-row-visit {
+    display: inline-block;
+    visibility: hidden;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent);
+    text-decoration: none;
+    margin-top: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+  }
+
+  .directory-row.is-selected .directory-row-visit {
+    visibility: visible;
+  }
+
+  .directory-ring-wrap {
+    flex: 1;
+    order: 1;
+    width: 100%;
+    min-height: 0;
+    padding: 0 1rem;
+    pointer-events: none;
+  }
+
+  .ring-zoom-controls {
+    display: none;
+  }
+
+  .directory-ring-svg {
+    touch-action: auto !important;
+    cursor: default !important;
+  }
+}
+
+/* ── Tablet: constrain fonts ── */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .hero-top { font-size: clamp(4rem, 9vw, 7rem); }
+  .hero-bottom-text { font-size: 11cqw; }
+  .about-headline { font-size: clamp(3rem, 6vw, 5rem); }
+  .about-inner { gap: 2rem; }
+  .join-headline { font-size: clamp(4rem, 9vw, 7rem); }
+  .join-count-number { font-size: clamp(2rem, 6vw, 5rem); }
+  .join-inner { width: calc(100% - 3rem); height: calc(100% - 3rem); }
+  .canada-flag { height: 12vw; }
+  .splash-map { width: 85vw; }
 }
 
 /* ── Panel 4: Explore (live site preview) ── */
@@ -700,8 +827,19 @@ body {
   pointer-events: none;
 }
 
-.preview-overlay:hover:not(.is-fading):not(.is-dismissed) .preview-overlay-hint {
+.preview-overlay.is-loading .preview-overlay-hint {
+  opacity: 0 !important;
+}
+
+.preview-overlay:hover:not(.is-fading):not(.is-dismissed):not(.is-loading) .preview-overlay-hint {
   opacity: 1;
+}
+
+/* Mobile: show hint by default since there's no hover */
+@media (max-width: 767px) {
+  .preview-overlay:not(.is-fading):not(.is-dismissed):not(.is-loading) .preview-overlay-hint {
+    opacity: 1;
+  }
 }
 
 .preview-skeleton {
@@ -903,8 +1041,16 @@ body {
   .preview-inner {
     min-height: 80vh;
   }
+  .preview-iframe-wrap {
+    inset: 0 0 calc(44px + 1.2rem) 0;
+  }
   .preview-controls {
     padding: 0.6rem 1rem;
+  }
+  .preview-nav {
+    width: 44px;
+    height: 44px;
+    font-size: 1rem;
   }
 }
 
@@ -926,7 +1072,7 @@ body {
 }
 
 .join-headline {
-  font-size: 11vw;
+  font-size: clamp(4rem, 11vw, 10rem);
   color: var(--fg);
   display: flex;
   flex-direction: column;
@@ -946,7 +1092,7 @@ body {
 }
 
 .join-count-number {
-  font-size: 8vw;
+  font-size: clamp(2rem, 8vw, 7rem);
   font-weight: 900;
   line-height: 1;
   letter-spacing: -0.04em;
@@ -1088,14 +1234,19 @@ body {
 
   .hero-top { font-size: 24vw; }
 
+  .splash-inner > header {
+    position: relative;
+  }
+
   .canada-flag {
-    height: 16vw;
-    flex-shrink: 1;
-    align-self: flex-end;
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    height: 17vw;
   }
 
   .splash-map {
-    width: clamp(400px, 110vw, 480px);
+    width: min(100vw, 480px);
     max-width: none;
   }
 
@@ -1113,6 +1264,57 @@ body {
   .ring-widget { width: 60vw; }
   .ring-widget-arrow { font-size: 8cqw; }
   .ring-widget-leaf img { height: 12cqw; }
+
+  .join-inner {
+    width: calc(100% - 1.5rem);
+    height: calc(100% - 1.5rem);
+  }
+
+  .join-top {
+    gap: 0.5rem;
+  }
+
+  .join-headline {
+    font-size: clamp(3rem, 18vw, 5rem);
+    line-height: 1.1;
+  }
+
+  .join-count {
+    gap: 0.75rem;
+    padding-top: 0;
+  }
+
+  .join-count-number {
+    font-size: clamp(2rem, 12vw, 4rem);
+  }
+
+  .join-count-label {
+    font-size: 0.85rem;
+  }
+
+  .join-bottom {
+    flex-direction: column;
+    gap: 1.5rem;
+    align-items: stretch;
+  }
+
+  .join-leaf {
+    bottom: -10vw;
+  }
+
+  .join-steps {
+    gap: 0.5rem;
+  }
+
+  .join-step-text {
+    font-size: 1rem;
+  }
+
+  .join-button {
+    text-align: center;
+    padding: 1rem 2rem;
+    font-size: 1rem;
+  }
 }
 
 /* ── Mobile + reduced motion: flat fallback ── */
