@@ -16,7 +16,7 @@ interface RingLink extends SimulationLinkDatum<RingMember> {
 }
 
 function displayDomain(url: string): string {
-  return url.replace(/^https?:\/\//, '').replace(/\/$/, '')
+  return url.replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/$/, '')
 }
 
 function buildLinks(members: RingMember[]): RingLink[] {
@@ -45,6 +45,9 @@ function init() {
   const pad = 80
   const cx = width / 2
   const cy = height / 2
+  const totalW = width + pad * 2
+  const totalH = height + pad * 2
+  const defaultZoom = 0.8
   const spread = 150
   const nodeR = 5
   const driftAlpha = 0.006
@@ -71,10 +74,10 @@ function init() {
   const linkData = buildLinks(members)
 
   // Viewbox pan/zoom state
-  let vx = -pad
-  let vy = -pad
-  let vw = width + pad * 2
-  let vh = height + pad * 2
+  let vw = totalW / defaultZoom
+  let vh = totalH / defaultZoom
+  let vx = cx - vw / 2
+  let vy = cy - vh / 2
   const vx0 = vx
   const vy0 = vy
   const vw0 = vw
@@ -89,8 +92,6 @@ function init() {
 
   function zoom(direction: 1 | -1) {
     const factor = 1 + zoomStep * direction
-    const totalW = width + pad * 2
-    const totalH = height + pad * 2
     const newW = Math.max(totalW / maxZoom, Math.min(totalW / minZoom, vw * factor))
     const newH = Math.max(totalH / maxZoom, Math.min(totalH / minZoom, vh * factor))
     // Keep center stable
@@ -122,7 +123,7 @@ function init() {
   // SVG
   const svg = select(container)
     .append('svg')
-    .attr('viewBox', `${-pad} ${-pad} ${width + pad * 2} ${height + pad * 2}`)
+    .attr('viewBox', `${vx} ${vy} ${vw} ${vh}`)
     .attr('class', 'directory-ring-svg')
     .attr('role', 'img')
     .attr('aria-label', `Webring visualization with ${members.length} members`)
@@ -314,14 +315,13 @@ function init() {
   }
 
   // Directory list <-> ring hover interaction
-  const rows = document.querySelectorAll<HTMLElement>('.directory-row[data-member]')
+  const rows = Array.from(document.querySelectorAll<HTMLElement>('.directory-row[data-member]'))
 
   rows.forEach(row => {
     const slug = row.getAttribute('data-member')
     if (!slug) return
 
     if (isTouchDevice) {
-      // Add visit link inside each card
       const visitLink = document.createElement('a')
       visitLink.className = 'directory-row-visit'
       visitLink.href = row.getAttribute('href') ?? '#'
@@ -330,7 +330,6 @@ function init() {
       visitLink.textContent = 'Visit \u2197'
       row.appendChild(visitLink)
 
-      // Tap card: select member (prevent navigation)
       row.addEventListener('click', (e) => {
         if ((e.target as Element).closest('.directory-row-visit')) return
         e.preventDefault()
@@ -341,6 +340,133 @@ function init() {
       row.addEventListener('mouseleave', () => hideBloom())
     }
   })
+
+  // Pagination — recalculate page size when the directory panel settles
+  const directoryListEl = document.querySelector<HTMLElement>('.directory-list')
+  const headerEl = document.querySelector<HTMLElement>('.directory-header')
+  const directoryInnerEl = directoryListEl?.closest<HTMLElement>('.directory-inner') ?? null
+  const directoryListWrapEl = directoryListEl?.closest<HTMLElement>('.directory-list-wrap') ?? null
+  const paginationEl = directoryListWrapEl?.querySelector<HTMLElement>('.directory-pagination') ?? null
+  const prevBtn = document.getElementById('page-prev') as HTMLButtonElement | null
+  const nextBtn = document.getElementById('page-next') as HTMLButtonElement | null
+  const pageInfo = document.getElementById('page-info')
+  let pageSize = 10
+  let currentPage = 0
+  let totalPages = Math.max(1, Math.ceil(rows.length / pageSize))
+  let pageMeasureFrame = 0
+  let pageMeasurePaintFrame = 0
+  let searchMatches: Set<string> | null = null
+
+  function parsePixels(value: string): number {
+    const parsed = Number.parseFloat(value)
+    return Number.isFinite(parsed) ? parsed : 0
+  }
+
+  function getBlockPadding(el: HTMLElement | null): number {
+    if (!el) return 0
+    const styles = getComputedStyle(el)
+    return parsePixels(styles.paddingTop) + parsePixels(styles.paddingBottom)
+  }
+
+  function getBlockGap(el: HTMLElement | null): number {
+    if (!el) return 0
+    const styles = getComputedStyle(el)
+    return parsePixels(styles.rowGap || styles.gap)
+  }
+
+  function hasPagedListLayout(): boolean {
+    if (!directoryListEl || !paginationEl) return false
+    return getComputedStyle(directoryListEl).flexDirection !== 'row'
+  }
+
+  function computePageSize() {
+    if (!directoryListEl || !rows.length) return
+    if (!hasPagedListLayout()) {
+      currentPage = 0
+      totalPages = 1
+      renderPage()
+      return
+    }
+    const sampleRow = rows.find(row => row.style.display !== 'none') ?? rows[0]
+    const wasHidden = sampleRow.style.display === 'none'
+    if (wasHidden) sampleRow.style.display = ''
+    // `getBoundingClientRect()` changes with the panel's 3D rotation.
+    // Use layout-box heights so pagination stays stable while the ring moves.
+    const rowHeight = sampleRow.offsetHeight
+    if (wasHidden) sampleRow.style.display = 'none'
+    if (rowHeight === 0) return
+    const headerHeight = headerEl?.offsetHeight ?? 0
+    const panelHeight = directoryListEl.closest<HTMLElement>('.panel')?.clientHeight || window.innerHeight
+    const listHeightFromPanel = panelHeight
+      - getBlockPadding(directoryInnerEl)
+      - getBlockGap(directoryListWrapEl)
+      - (paginationEl?.offsetHeight ?? 0)
+    const listHeight = listHeightFromPanel > 0
+      ? listHeightFromPanel
+      : (directoryListEl.clientHeight || directoryListEl.offsetHeight)
+    if (listHeight === 0) return
+    pageSize = Math.max(5, Math.floor((listHeight - headerHeight) / rowHeight))
+    totalPages = Math.max(1, Math.ceil(rows.length / pageSize))
+    if (currentPage >= totalPages) currentPage = totalPages - 1
+  }
+
+  function schedulePageSizeRecalc() {
+    if (pageMeasureFrame) cancelAnimationFrame(pageMeasureFrame)
+    if (pageMeasurePaintFrame) cancelAnimationFrame(pageMeasurePaintFrame)
+
+    pageMeasureFrame = requestAnimationFrame(() => {
+      pageMeasureFrame = 0
+      pageMeasurePaintFrame = requestAnimationFrame(() => {
+        pageMeasurePaintFrame = 0
+        computePageSize()
+        renderPage()
+      })
+    })
+  }
+
+  function renderPage() {
+    const paginationActive = hasPagedListLayout() && !searchMatches
+    directoryListEl?.classList.toggle('is-paginated', hasPagedListLayout())
+    if (paginationEl) paginationEl.hidden = !paginationActive
+
+    if (!paginationActive) {
+      rows.forEach(row => {
+        row.style.display = ''
+      })
+      return
+    }
+
+    const start = currentPage * pageSize
+    const end = start + pageSize
+    rows.forEach((row, i) => {
+      row.style.display = (i >= start && i < end) ? '' : 'none'
+    })
+    if (prevBtn) prevBtn.disabled = currentPage === 0
+    if (nextBtn) nextBtn.disabled = currentPage >= totalPages - 1
+    if (pageInfo) pageInfo.textContent = `${currentPage + 1} / ${totalPages}`
+  }
+
+  prevBtn?.addEventListener('click', () => {
+    if (currentPage > 0) { currentPage--; renderPage() }
+  })
+  nextBtn?.addEventListener('click', () => {
+    if (currentPage < totalPages - 1) { currentPage++; renderPage() }
+  })
+
+  const ringEl = document.getElementById('ring')
+  ringEl?.addEventListener('panelsettle', ((e: CustomEvent) => {
+    if (e.detail?.index === 2) {
+      schedulePageSizeRecalc()
+    }
+  }) as EventListener)
+
+  // Initial render with default size
+  renderPage()
+  schedulePageSizeRecalc()
+  window.addEventListener('resize', schedulePageSizeRecalc)
+  document.fonts?.ready.then(() => {
+    schedulePageSizeRecalc()
+  }).catch(() => undefined)
 
   // Ring node hover -> bloom
   nodes
@@ -414,7 +540,9 @@ function init() {
       const q = searchInput.value.trim()
 
       if (q === '') {
+        searchMatches = null
         clearSearchState()
+        renderPage()
         resetViewBox()
         simulation.alphaTarget(driftAlpha).restart()
         return
@@ -432,6 +560,8 @@ function init() {
 
       const matched = members.filter(m => re.test(m.name))
       const matchedSlugs = new Set(matched.map(m => m.slug))
+      searchMatches = matchedSlugs
+      renderPage()
 
       // Clear previous highlight classes
       document.querySelectorAll('.ring-node.is-highlighted').forEach(el => el.classList.remove('is-highlighted'))
@@ -455,6 +585,8 @@ function init() {
       })
 
       if (matched.length > 0) {
+        document.querySelector<HTMLElement>(`.directory-row[data-member="${matched[0].slug}"]`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' })
         fitViewBoxToMatches(matched)
       } else {
         resetViewBox()

@@ -107,7 +107,7 @@ app.get('/', async (c) => {
           <script src="/splash.js"></script>
           {raw(`<script>window.__PREVIEW_MEMBERS = ${previewMembers}</script>`)}
           <script src="/preview.js"></script>
-          {raw(`<script>(function(){var ring=document.getElementById('ring');var dirIdx=parseInt(ring.getAttribute('data-directory-index'),10);var loaded=false;ring.addEventListener('panelchange',function(e){if(!loaded&&e.detail.index===dirIdx){loaded=true;var s=document.createElement('script');s.src='/d3-ring.js';document.body.appendChild(s)}});var skip=document.querySelector('.skip-link');if(skip){skip.addEventListener('click',function(e){e.preventDefault();ring.dispatchEvent(new CustomEvent('snapto',{detail:{index:dirIdx}}));ring.focus()})}})();</script>`)}
+          {raw(`<script>(function(){var ring=document.getElementById('ring');var dirIdx=parseInt(ring.getAttribute('data-directory-index'),10);var loaded=false;function loadDirectoryRing(){if(loaded)return;loaded=true;var s=document.createElement('script');s.src='/d3-ring.js';document.body.appendChild(s)}var activeDot=document.querySelector('.ring-dot.is-active');if(activeDot&&parseInt(activeDot.getAttribute('data-dot'),10)===dirIdx){loadDirectoryRing()}ring.addEventListener('panelchange',function(e){if(e.detail.index===dirIdx){loadDirectoryRing()}});var skip=document.querySelector('.skip-link');if(skip){skip.addEventListener('click',function(e){e.preventDefault();loadDirectoryRing();ring.dispatchEvent(new CustomEvent('snapto',{detail:{index:dirIdx}}));ring.focus()})}})();</script>`)}
         </body>
       </html>
     </>
